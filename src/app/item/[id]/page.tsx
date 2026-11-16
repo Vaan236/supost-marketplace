@@ -3,7 +3,16 @@
 import { Suspense, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Mail, MapPin, Send, Tag } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CreditCard,
+  Mail,
+  MapPin,
+  Send,
+  ShoppingBag,
+  Tag,
+} from "lucide-react";
 import { supabase, Listing, formatTimeAgo } from "@/lib/supabase";
 
 function ListingDetailContent() {
@@ -11,8 +20,11 @@ function ListingDetailContent() {
   const id = Array.isArray(params?.id) ? params.id[0] : params?.id;
 
   const [listing, setListing] = useState<Listing | null>(null);
+  const [sellerReady, setSellerReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [isBuying, setIsBuying] = useState(false);
+  const [buyError, setBuyError] = useState<string | null>(null);
 
   const [buyerEmail, setBuyerEmail] = useState("");
   const [messageText, setMessageText] = useState(
@@ -25,7 +37,7 @@ function ListingDetailContent() {
   useEffect(() => {
     if (!id) return;
 
-    async function fetchListing() {
+    async function fetchListingAndSeller() {
       setIsLoading(true);
       const { data, error } = await supabase
         .from("listings")
@@ -35,14 +47,52 @@ function ListingDetailContent() {
 
       if (error || !data) {
         setNotFound(true);
-      } else {
-        setListing(data as Listing);
+        setIsLoading(false);
+        return;
       }
+
+      const item = data as Listing;
+      setListing(item);
+
+      // Check if seller has completed Stripe Connect onboarding
+      const { data: seller } = await supabase
+        .from("sellers")
+        .select("charges_enabled")
+        .eq("email", item.seller_email.trim().toLowerCase())
+        .maybeSingle();
+
+      setSellerReady(Boolean(seller?.charges_enabled));
       setIsLoading(false);
     }
 
-    fetchListing();
+    fetchListingAndSeller();
   }, [id]);
+
+  const handleBuyNow = async () => {
+    if (!listing) return;
+    setBuyError(null);
+    setIsBuying(true);
+
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId: listing.id }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.url) {
+        setBuyError(data.error || "Could not open Stripe Checkout.");
+        setIsBuying(false);
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch {
+      setBuyError("Network error starting checkout.");
+      setIsBuying(false);
+    }
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +151,8 @@ function ListingDetailContent() {
     );
   }
 
+  const isSold = listing.status === "sold";
+
   const mailtoHref = `mailto:${encodeURIComponent(
     listing.seller_email
   )}?subject=${encodeURIComponent(
@@ -119,7 +171,12 @@ function ListingDetailContent() {
 
       <div className="bg-white border border-[#dadde1] rounded-xl overflow-hidden grid grid-cols-1 lg:grid-cols-[1.4fr_400px] shadow-xs">
         {/* Left Image Stage */}
-        <div className="bg-[#f0f2f5] border-b lg:border-b-0 lg:border-r border-[#dadde1] flex items-center justify-center min-h-[340px] lg:min-h-[560px] p-4">
+        <div className="bg-[#f0f2f5] border-b lg:border-b-0 lg:border-r border-[#dadde1] flex items-center justify-center min-h-[340px] lg:min-h-[560px] p-4 relative">
+          {isSold && (
+            <span className="absolute top-4 left-4 bg-red-600 text-white text-xs font-extrabold uppercase tracking-wider px-3 py-1.5 rounded-md shadow-sm">
+              Sold
+            </span>
+          )}
           {listing.image_url ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
@@ -132,13 +189,20 @@ function ListingDetailContent() {
           )}
         </div>
 
-        {/* Right Facebook Marketplace Details & Seller Chat Box */}
+        {/* Right Details, Buy Now & Seller Chat Box */}
         <div className="p-5 flex flex-col justify-between space-y-5 bg-white">
           <div className="space-y-4">
             <div>
-              <h1 className="text-2xl font-bold text-[#1c1e21] leading-snug">
-                {listing.title}
-              </h1>
+              <div className="flex items-start justify-between gap-2">
+                <h1 className="text-2xl font-bold text-[#1c1e21] leading-snug">
+                  {listing.title}
+                </h1>
+                {isSold && (
+                  <span className="shrink-0 bg-red-100 text-red-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                    Sold
+                  </span>
+                )}
+              </div>
               <div className="text-xl font-bold text-[#1c1e21] mt-1">
                 ${Number(listing.price).toLocaleString()}
               </div>
@@ -149,6 +213,51 @@ function ListingDetailContent() {
                   {listing.location}
                 </span>
               </div>
+            </div>
+
+            {/* Stripe Buy Now Section */}
+            <div className="pt-1 space-y-2">
+              {isSold ? (
+                <div className="w-full bg-[#e4e6eb] text-[#65676b] font-bold text-sm py-2.5 px-4 rounded-lg text-center">
+                  Item Sold
+                </div>
+              ) : sellerReady ? (
+                <button
+                  type="button"
+                  onClick={handleBuyNow}
+                  disabled={isBuying}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-[#16a34a] hover:bg-[#15803d] disabled:bg-[#86efac] text-white font-bold text-sm py-3 rounded-lg shadow-xs transition-colors cursor-pointer"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>
+                    {isBuying
+                      ? "Opening Stripe Checkout..."
+                      : `Buy Now · $${Number(listing.price).toLocaleString()}`}
+                  </span>
+                </button>
+              ) : (
+                <div className="bg-[#f7f8fa] border border-[#dadde1] rounded-lg p-3 text-xs text-[#65676b] space-y-1.5">
+                  <div className="font-semibold text-[#1c1e21] flex items-center gap-1.5">
+                    <CreditCard className="w-3.5 h-3.5 text-[#635bff]" />
+                    <span>Online checkout not enabled yet</span>
+                  </div>
+                  <p>
+                    This seller hasn&apos;t connected Stripe payouts yet.{" "}
+                    <Link
+                      href={`/connect?email=${encodeURIComponent(
+                        listing.seller_email
+                      )}`}
+                      className="text-[#635bff] font-semibold underline"
+                    >
+                      Seller? Connect here
+                    </Link>
+                  </p>
+                </div>
+              )}
+
+              {buyError && (
+                <p className="text-xs text-red-600 font-medium">{buyError}</p>
+              )}
             </div>
 
             <div className="inline-flex items-center gap-1.5 bg-[#f0f2f5] text-[#1c1e21] text-xs font-semibold px-3 py-1.5 rounded-full">
