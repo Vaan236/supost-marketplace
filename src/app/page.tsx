@@ -255,7 +255,7 @@ export default function MarketplaceHomePage() {
                     <img
                       src={item.image_url}
                       alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-200"
+                      className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xs text-[#65676b]">
@@ -263,10 +263,16 @@ export default function MarketplaceHomePage() {
                     </div>
                   )}
 
-                  {isJustListed(item.created_at) && (
-                    <span className="absolute top-2 left-2 bg-white/95 text-[#1c1e21] text-[11px] font-semibold px-2 py-0.5 rounded-md shadow-xs">
-                      Just listed
+                  {item.status === "sold" ? (
+                    <span className="absolute top-2 left-2 bg-red-600 text-white text-[11px] font-bold uppercase px-2 py-0.5 rounded-md shadow-xs">
+                      Sold
                     </span>
+                  ) : (
+                    isJustListed(item.created_at) && (
+                      <span className="absolute top-2 left-2 bg-white/95 text-[#1c1e21] text-[11px] font-semibold px-2 py-0.5 rounded-md shadow-xs">
+                        Just listed
+                      </span>
+                    )
                   )}
                 </div>
 

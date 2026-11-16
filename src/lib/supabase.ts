@@ -20,6 +20,26 @@ export interface Listing {
   seller_email: string;
   image_url: string | null;
   location: string;
+  status?: string;
+  created_at: string;
+}
+
+export interface Seller {
+  email: string;
+  stripe_account_id: string;
+  charges_enabled: boolean;
+  created_at: string;
+}
+
+export interface Order {
+  id: string;
+  listing_id: string | null;
+  buyer_email: string | null;
+  seller_email: string;
+  amount: number;
+  platform_fee: number;
+  stripe_session_id: string;
+  status: string;
   created_at: string;
 }
 
