@@ -16,7 +16,6 @@ export async function POST(req: NextRequest) {
 
     const origin = req.nextUrl.origin;
 
-    // Check if seller already has a connected account in Supabase
     const { data: existingSeller } = await supabase
       .from("sellers")
       .select("*")
@@ -27,8 +26,18 @@ export async function POST(req: NextRequest) {
 
     if (!accountId) {
       const account = await stripe.accounts.create({
-        type: "express",
         email: cleanEmail,
+        controller: {
+          stripe_dashboard: {
+            type: "express",
+          },
+          fees: {
+            payer: "application",
+          },
+          losses: {
+            payments: "stripe",
+          },
+        },
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
