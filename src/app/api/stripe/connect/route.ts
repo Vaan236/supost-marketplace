@@ -29,10 +29,10 @@ export async function POST(req: NextRequest) {
         email: cleanEmail,
         controller: {
           stripe_dashboard: {
-            type: "express",
+            type: "full",
           },
           fees: {
-            payer: "application",
+            payer: "account",
           },
           losses: {
             payments: "stripe",
